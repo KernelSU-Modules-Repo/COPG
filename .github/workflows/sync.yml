@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
   repository_dispatch:
     types: [sync-release]
+  schedule:
+    - cron: '0 */6 * * *'   # fallback poll every 6h in case a dispatch is missed
 
 permissions:
   id-token: write
@@ -42,9 +44,7 @@ jobs:
         tag: ${{ fromJson(needs.get_missing_tags.outputs.tags) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.REPO_SYNC_PAT }}
+        uses: actions/checkout@v5
 
       - name: Pull release artifact and fix line endings
         run: |
