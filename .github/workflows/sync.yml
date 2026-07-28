@@ -1,0 +1,82 @@
+name: Sync release
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [sync-release]
+
+permissions:
+  id-token: write
+  contents: write
+  actions: write
+  attestations: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  SOURCE_REPO: 'AlirezaParsi/COPG'
+  MODULE_NAME: 'COPG'
+
+jobs:
+  get_missing_tags:
+    runs-on: ubuntu-latest
+    outputs:
+      tags: ${{ steps.check.outputs.tags }}
+      latest: ${{ steps.check.outputs.latest }}
+    steps:
+      - name: Check tags
+        id: check
+        run: |
+          SOURCE_TAGS=$(gh api repos/$SOURCE_REPO/tags | jq -r '.[].name' | sort)
+          CURRENT_TAGS=$(gh api repos/$GITHUB_REPOSITORY/tags | jq -r '.[].name' | sort)
+          MISSING=$(comm -23 <(echo "$SOURCE_TAGS") <(echo "$CURRENT_TAGS"))
+          MISSING_JSON=$(echo "$MISSING" | jq -R -s -c 'split("\n")[:-1] | map(select(. != ""))')
+          echo "tags=$MISSING_JSON" >> $GITHUB_OUTPUT
+          LATEST=$(echo "$SOURCE_TAGS" | tail -1)
+          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+
+  sync_and_release:
+    needs: get_missing_tags
+    if: needs.get_missing_tags.outputs.tags != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tag: ${{ fromJson(needs.get_missing_tags.outputs.tags) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.REPO_SYNC_PAT }}
+
+      - name: Pull release artifact and fix line endings
+        run: |
+          gh release download ${{ matrix.tag }} --repo $SOURCE_REPO --pattern "$MODULE_NAME*.zip" --dir ./dl
+          ZIP_FILE=$(ls ./dl/$MODULE_NAME*.zip | head -1)
+
+          python3 - "$ZIP_FILE" "$MODULE_NAME.zip" <<'PYEOF'
+          import sys, zipfile
+          src, dst = sys.argv[1], sys.argv[2]
+          with zipfile.ZipFile(src, 'r') as zin, \
+               zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as zout:
+              for item in zin.infolist():
+                  data = zin.read(item.filename)
+                  if item.filename == 'module.prop':
+                      data = data.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+                  zout.writestr(item, data)
+          PYEOF
+
+          BODY=$(gh release view ${{ matrix.tag }} --repo $SOURCE_REPO --json body -q .body)
+          echo "RELEASE_BODY<<EOF" >> $GITHUB_ENV
+          echo "$BODY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Create Release
+        uses: KernelSU-Modules-Repo/module_release@main
+        with:
+          tag_name: ${{ matrix.tag }}
+          make_latest: ${{ matrix.tag == needs.get_missing_tags.outputs.latest }}
+          file: "${{ env.MODULE_NAME }}.zip"
+          body: ${{ env.RELEASE_BODY }}
+          generate_release_notes: false
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "${{ env.MODULE_NAME }}.zip"
