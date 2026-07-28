@@ -18,37 +18,29 @@ env:
   MODULE_NAME: 'COPG'
 
 jobs:
-  get_missing_tags:
+  sync_latest:
     runs-on: ubuntu-latest
-    outputs:
-      tags: ${{ steps.check.outputs.tags }}
-      latest: ${{ steps.check.outputs.latest }}
     steps:
-      - name: Check tags
-        id: check
+      - name: Resolve latest source release
+        id: latest
         run: |
-          SOURCE_TAGS=$(gh api repos/$SOURCE_REPO/tags | jq -r '.[].name' | sort)
-          CURRENT_TAGS=$(gh api repos/$GITHUB_REPOSITORY/tags | jq -r '.[].name' | sort)
-          MISSING=$(comm -23 <(echo "$SOURCE_TAGS") <(echo "$CURRENT_TAGS"))
-          MISSING_JSON=$(echo "$MISSING" | jq -R -s -c 'split("\n")[:-1] | map(select(. != ""))')
-          echo "tags=$MISSING_JSON" >> $GITHUB_OUTPUT
-          LATEST=$(echo "$SOURCE_TAGS" | tail -1)
-          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+          TAG=$(gh release view --repo "$SOURCE_REPO" --json tagName -q .tagName)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
 
-  sync_and_release:
-    needs: get_missing_tags
-    if: needs.get_missing_tags.outputs.tags != '[]'
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        tag: ${{ fromJson(needs.get_missing_tags.outputs.tags) }}
-    steps:
       - name: Checkout
+        if: steps.latest.outputs.exists == 'false'
         uses: actions/checkout@v5
 
-      - name: Pull release artifact and fix line endings
+      - name: Pull latest artifact and fix line endings
+        if: steps.latest.outputs.exists == 'false'
         run: |
-          gh release download ${{ matrix.tag }} --repo $SOURCE_REPO --pattern "$MODULE_NAME*.zip" --dir ./dl
+          TAG="${{ steps.latest.outputs.tag }}"
+          gh release download "$TAG" --repo "$SOURCE_REPO" --pattern "$MODULE_NAME*.zip" --dir ./dl
           ZIP_FILE=$(ls ./dl/$MODULE_NAME*.zip | head -1)
 
           python3 - "$ZIP_FILE" "$MODULE_NAME.zip" <<'PYEOF'
@@ -63,20 +55,34 @@ jobs:
                   zout.writestr(item, data)
           PYEOF
 
-          BODY=$(gh release view ${{ matrix.tag }} --repo $SOURCE_REPO --json body -q .body)
-          echo "RELEASE_BODY<<EOF" >> $GITHUB_ENV
-          echo "$BODY" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          BODY=$(gh release view "$TAG" --repo "$SOURCE_REPO" --json body -q .body)
+          echo "RELEASE_BODY<<EOF" >> "$GITHUB_ENV"
+          echo "$BODY" >> "$GITHUB_ENV"
+          echo "EOF" >> "$GITHUB_ENV"
 
       - name: Create Release
+        if: steps.latest.outputs.exists == 'false'
         uses: KernelSU-Modules-Repo/module_release@main
         with:
-          tag_name: ${{ matrix.tag }}
-          make_latest: ${{ matrix.tag == needs.get_missing_tags.outputs.latest }}
+          tag_name: ${{ steps.latest.outputs.tag }}
+          make_latest: true
           file: "${{ env.MODULE_NAME }}.zip"
           body: ${{ env.RELEASE_BODY }}
           generate_release_notes: false
 
       - uses: actions/attest-build-provenance@v2
+        if: steps.latest.outputs.exists == 'false'
         with:
           subject-path: "${{ env.MODULE_NAME }}.zip"
+
+      - name: Prune to latest only
+        run: |
+          KEEP="${{ steps.latest.outputs.tag }}"
+          # safety: never prune unless the latest release is actually present
+          gh release view "$KEEP" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || { echo "latest not present, skip prune"; exit 0; }
+          for t in $(gh release list --repo "$GITHUB_REPOSITORY" --json tagName -q '.[].tagName'); do
+            if [ "$t" != "$KEEP" ]; then
+              echo "deleting old release/tag $t"
+              gh release delete "$t" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+            fi
+          done
