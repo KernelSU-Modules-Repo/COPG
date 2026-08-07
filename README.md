@@ -8,7 +8,7 @@
 
 <br>
 
-[![Version](https://img.shields.io/badge/version-5.9.0-818cf8?style=for-the-badge)](https://github.com/AlirezaParsi/COPG/releases)
+[![Version](https://img.shields.io/badge/version-6.3.0-818cf8?style=for-the-badge)](https://github.com/AlirezaParsi/COPG/releases)
 [![Zygisk](https://img.shields.io/badge/Zygisk-Compatible-34d399?style=for-the-badge)](https://github.com/topjohnwu/Magisk)
 [![Android](https://img.shields.io/badge/Android-9.0%2B-3ddc84?style=for-the-badge&logo=android&logoColor=white)](https://www.android.com/)
 [![Downloads](https://img.shields.io/github/downloads/AlirezaParsi/COPG/total?style=for-the-badge&color=f59e0b)](https://github.com/AlirezaParsi/COPG/releases)
@@ -37,8 +37,8 @@ are otherwise gated to specific hardware. It pairs that with a **CPU spoofer**, 
 <td width="50%" valign="top">
 
 #### 🎯 Device Spoofing
-Per‑app device profiles (brand, model, fingerprint, SDK, **serial**) so each game sees the exact
-flagship it rewards.
+Per‑app device profiles (brand, model, fingerprint, SDK, **baseband**, **per‑app serial** and 12
+extra Build fields) so each game sees the exact flagship it rewards.
 
 #### ⚙️ CPU Spoofing
 Spoof the CPU to flagship‑class silicon for apps that gate features on the chipset.
@@ -56,6 +56,18 @@ phone service so Settings, `*#06#` and every app read it; runs in a separate pro
 #### 🔒 DRM / Widevine *(PRO)*
 Report a higher **Widevine security level** (L1 / L2 / L3) and spoof the DRM **device &amp; system ID**
 for apps that gate or display it.
+
+#### 🌍 Timezone &amp; Language *(free)*
+Give each app its own **timezone** and its own **language / region** (BCP‑47) — apps read and even
+**render** in the fake locale. Applied the stealth, system‑side way, so nothing loads into the app.
+
+#### ⏱️ Fake Uptime *(PRO)*
+Make an app think the device has been running for **days** — shifts both the Java and native uptime
+readers, useful against anti‑fraud / referral flows that distrust a freshly‑reset device.
+
+#### 🌐 WebView User‑Agent *(PRO)*
+Give any WebView‑based app its own **browser User‑Agent** — from a reusable named profile — for sites
+and in‑app pages that gate content, layout or pricing on the browser identity.
 
 </td>
 <td width="50%" valign="top">
@@ -86,8 +98,8 @@ It's a **resident** hook behind a *use‑at‑your‑own‑risk* gate — **neve
 debugging** (free) — pass the checks that banking &amp; privacy‑sensitive apps run.
 
 #### 🎛️ Per‑App Comfort Tweaks
-Auto **Do‑Not‑Disturb**, **disable auto‑brightness**, **keep screen on** and **stop logging** —
-applied only while a tagged game is active, then restored.
+Auto **Do‑Not‑Disturb**, **disable auto‑brightness**, **keep screen on**, **stop logging** and a
+per‑app **screen DPI** — applied only while a tagged game is active, then restored.
 
 </td>
 </tr>
@@ -190,8 +202,9 @@ straight from the manager. On **Magisk**, install the **KSU WebUI** app and open
 - 📋 **Library** — add &amp; manage **device profiles** and **per‑app spoof lists** with search,
   sort &amp; filters
 - ➕ **Add Package** — pick any installed app, choose a device profile, toggle **CPU / GPU / SIM /
-  Prop / Android ID / Advertising ID (GAID) / App Set ID / DRM / IMEI / Mock‑Location / Hide VPN /
-  Hide Developer Options** and the **DND / Auto‑Brightness / Keep‑Screen‑On** tweaks
+  Prop / Android ID / Advertising ID (GAID) / App Set ID / DRM / IMEI / Timezone / Language /
+  WebView User‑Agent / Fake Uptime / Mock‑Location / Hide VPN / Hide Developer Options** and the
+  **DND / Auto‑Brightness / Keep‑Screen‑On / Screen‑DPI** tweaks
 - 📊 **Dashboard** — live system info: Android, ABI, Zygisk variant, root &amp; kernel
 - 🆔 **Advertising ID** — view, randomize, set a custom one or restore your real ID (Settings · free)
 - 📡 **Global Hooks** — device‑wide **Global IMEI** (Settings): one fake IMEI for every app, `*#06#`
@@ -223,10 +236,11 @@ The WebUI is the recommended way to manage profiles, but you can also edit
 
 Package **tags** are colon suffixes — e.g. `:cpu=<model>` (CPU spoof + pick the chip),
 `:gpu=<model>` (GPU spoof + pick the GPU), `:cow` (prop spoof), `:aid` (Android ID),
-`:gaid` (Advertising ID), `:appset` (App Set ID), `:drm` (Widevine), `:imei` (IMEI), `:sim=<carrier>` / `:simx=<carrier>`
-(SIM · safe / aggressive), `:mock` (mock‑location hide), `:vpn` / `:vpns` (VPN hide),
-`:hidedev` (hide developer options), `:blocked` (force real CPU),
-`:dnd` / `:dab` / `:kso` / `:nolog` (comfort tweaks).
+`:serial` (per‑app serial), `:gaid` (Advertising ID), `:appset` (App Set ID), `:drm` (Widevine),
+`:imei` (IMEI), `:sim=<carrier>` / `:simx=<carrier>` (SIM · safe / aggressive), `:tz=<zone>` (timezone),
+`:lang=<bcp47>` (language / region), `:ua=<profile>` (WebView User‑Agent), `:uptime=<sec>` (fake uptime),
+`:mock` (mock‑location hide), `:vpn` / `:vpns` (VPN hide), `:hidedev` (hide developer options),
+`:blocked` (force real CPU), `:dnd` / `:dab` / `:kso` / `:nolog` / `:dpi=<n>` (comfort tweaks).
 
 </details>
 
